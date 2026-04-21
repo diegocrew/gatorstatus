@@ -1,6 +1,6 @@
-# 🎮 Service Status Monitor
+# Service Status Monitor
 
-A lightweight GitHub Actions pipeline that monitors gaming and online services for outages and sends instant **Telegram push notifications** when something changes — so you know before you sit down and open the launcher.
+A lightweight GitHub Actions pipeline that monitors gaming and online services for outages and sends instant **Telegram push notifications** when something changes so you know before you sit down and open the launcher.
 
 ---
 
@@ -59,6 +59,7 @@ Every 10 minutes, GitHub Actions:
 ├── scripts/
 │   └── check_status.py       # Main monitoring script
 ├── state.json                 # Last known status per service (auto-updated)
+├── config.json                # list of monitored services
 └── README.md
 ```
 
@@ -91,7 +92,7 @@ Every 10 minutes, GitHub Actions:
 
 **Optional hardening:**
 - In BotFather → `/mybots` → your bot → **Bot Settings** → **Allow Groups** → **Turn off**
-- The bot only ever *sends* to your chat ID — it never reads or responds to messages
+- The bot only ever *sends* to your chat ID it never reads or responds to messages
 
 ### 3. GitHub Secrets
 
@@ -152,13 +153,13 @@ Was: ⚠️ WARN  →  Now: ✅ UP
 
 ## Timezone
 
-Timestamps are displayed in **CET/CEST** (Central European Time), switching automatically between UTC+1 and UTC+2 based on EU daylight saving rules — no manual adjustment needed.
+Timestamps are displayed in **CET/CEST** (Central European Time), switching automatically between UTC+1 and UTC+2 based on EU daylight saving rules - no manual adjustment needed.
 
 ---
 
 ## Limitations
 
-- GitHub Actions scheduled workflows can lag a few minutes under load — this is a monitoring tool for gaming services, not a production SLA alerter
+- GitHub Actions scheduled workflows can lag a few minutes under load - this is a monitoring tool for gaming services, not a production SLA alerter
 - StatusGator free tier: **3 monitors maximum**
 - Steam has no official status page — the Website monitor is an HTTP probe only, not a granular service health feed
 
