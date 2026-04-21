@@ -199,7 +199,7 @@ def main():
 
     # Load state and detect transition
     state = load_state()
-    old_raw = state.get(SERVICE_KEY, {}).get("raw_status", "operational")
+    old_raw = state.get(SERVICE_KEY, {}).get("raw_status", "unknown")
 
     if old_raw != raw_status:
         print(f"🔄  Transition: {old_raw} → {raw_status}")

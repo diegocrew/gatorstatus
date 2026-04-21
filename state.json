@@ -10,10 +10,5 @@
   "steam": {
     "status": "up",
     "since": "2026-04-21 23:23:43 CEST"
-  },
-  "epic_store": {
-    "status": "up",
-    "raw_status": "operational",
-    "since": "2026-04-21 23:23:44 CEST"
-  }
+  }  
 }
