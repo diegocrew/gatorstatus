@@ -16,4 +16,4 @@ jobs:
       - name: Run status check
         env:
           STATUSGATOR_TOKEN: ${{ secrets.STATUSGATOR_TOKEN }}
-        run: python scripts/check_status.py
+        run: python scripts/status.py
