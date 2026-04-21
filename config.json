@@ -1,0 +1,7 @@
+{
+  "services": [
+    { "name": "Ubisoft", "match": "ubisoft" },
+    { "name": "Steam",   "match": "steam"   },
+    { "name": "EA Game", "match": "ea"      }
+  ]
+}

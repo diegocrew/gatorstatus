@@ -1,16 +1,8 @@
 """
-Service Status Monitor — Ubisoft + Steam
 Fetches monitor statuses from StatusGator API V3.
 Detects transitions and sends Telegram notifications.
 Commits updated state.json back to repo via git.
 
-Secrets required (GitHub Actions):
-    STATUSGATOR_TOKEN
-    TELEGRAM_BOT_TOKEN
-    TELEGRAM_CHAT_ID
-
-Usage:
-    python scripts/check_status.py
 """
 
 import os
@@ -26,7 +18,21 @@ STATUSGATOR_TOKEN = os.environ.get("STATUSGATOR_TOKEN", "")
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT   = os.environ.get("TELEGRAM_CHAT_ID", "")
 STATE_FILE      = "state.json"
-WATCHED         = {"steam", "ubisoft", "ea"}
+CONFIG_FILE     = "config.json"
+
+
+def load_config() -> list:
+    """Load service definitions from config.json."""
+    if not os.path.exists(CONFIG_FILE):
+        print(f"❌  {CONFIG_FILE} not found.")
+        sys.exit(1)
+    with open(CONFIG_FILE) as f:
+        data = json.load(f)
+    services = data.get("services", [])
+    if not services:
+        print(f"❌  No services defined in {CONFIG_FILE}.")
+        sys.exit(1)
+    return services
 
 # ── Status display ────────────────────────────────────────
 STATUS_EMOJI = {
@@ -132,6 +138,10 @@ def main():
         print(f"❌  Missing env vars: {', '.join(missing)}")
         sys.exit(1)
 
+    # Load service config
+    services = load_config()
+    watched_matches = {s["match"].lower(): s["name"] for s in services}
+
     # Auto-detect CET (UTC+1) vs CEST (UTC+2)
     # CEST: last Sunday of March → last Sunday of October
     now_utc = datetime.now(timezone.utc)
@@ -191,12 +201,14 @@ def main():
     for m in monitors:
         name       = (m.get("display_name") or "").strip()
         name_lower = name.lower()
-        if any(w in name_lower for w in WATCHED):
-            current[name_lower] = {
-                "name":         name,
-                "status":       (m.get("filtered_status") or "unknown").lower(),
-                "last_message": m.get("last_message") or "—",
-            }
+        for match_key, display_name in watched_matches.items():
+            if match_key in name_lower:
+                current[match_key] = {
+                    "name":         display_name,
+                    "status":       (m.get("filtered_status") or "unknown").lower(),
+                    "last_message": m.get("last_message") or "—",
+                }
+                break
 
     # ── Print current statuses ────────────────────────────
     print("=" * 45)
