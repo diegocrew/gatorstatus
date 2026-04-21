@@ -15,12 +15,18 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v6
 
-      - name: Run status check
+      - name: Check StatusGator services (Ubisoft, Steam, EA)
         env:
           STATUSGATOR_TOKEN:   ${{ secrets.STATUSGATOR_TOKEN }}
           TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python scripts/status.py
+        run: python scripts/statusgator.py
+
+      - name: Check Epic Games Store (direct)
+        env:
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/check_epic.py
 
       - name: Commit updated state.json
         run: |
