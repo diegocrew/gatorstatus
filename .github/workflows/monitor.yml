@@ -1,0 +1,19 @@
+name: Service Status Monitor
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # every 10 minutes
+  workflow_dispatch:          # manual trigger for testing
+
+jobs:
+  check-status:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Run status check
+        env:
+          STATUSGATOR_TOKEN: ${{ secrets.STATUSGATOR_TOKEN }}
+        run: python scripts/check_status.py
