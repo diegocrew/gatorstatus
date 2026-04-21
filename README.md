@@ -1,33 +1,37 @@
 # Service Status Monitor
-
-A lightweight GitHub Actions pipeline that monitors gaming and online services for outages and sends instant **Telegram push notifications** when something changes so you know before you sit down and open the launcher.
-
+ 
+A lightweight GitHub Actions pipeline that monitors gaming and online services for outages and sends Telegram push notifications when something changes, so you know before you sit down and open the launcher.
+ 
 ---
-
+ 
 ## How It Works
-
+ 
 Every 10 minutes, GitHub Actions:
-
+ 
 1. Calls the **StatusGator API** to fetch current monitor statuses
-2. Compares against the last known state (`state.json`)
-3. If a **transition** is detected (e.g. `up → warn`, `warn → down`, `down → up`) — sends a Telegram message
-4. Commits the updated `state.json` back to the repo
-
-**No notification is sent if nothing changed.** Silence = everything is fine.
-
+2. Fetches **Epic Games Store** status directly from the official Atlassian status page
+3. Compares each service against the last known state (`state.json`)
+4. Sends a Telegram message only if a transition is detected (e.g. `up -> warn`, `down -> up`)
+5. Commits the updated `state.json` back to the repo
+No notification is sent if nothing changed. Silence means everything is fine.
+ 
+First run always fires a notification per service so you know the pipeline is working.
+ 
 ---
-
+ 
 ## Monitored Services
-
+ 
 | Service | Monitor Type | Source |
 |---------|-------------|--------|
 | Ubisoft Connect | Service monitor | Official Ubisoft status page via StatusGator |
 | Steam | Website monitor | HTTP probe via StatusGator |
 | EA / Electronic Arts | Service monitor | Official EA status page via StatusGator (21 components) |
-
-> Free tier maxed at 3 monitors. Easily extendable with a paid StatusGator plan — services with official Atlassian Statuspage feeds (GitHub, Xbox, Epic Games) can be added with minimal code changes.
-
+| Epic Games Store | Direct API | status.epicgames.com (Atlassian Statuspage, no auth required) |
+ 
+StatusGator free tier is capped at 3 monitors. Epic is fetched directly to work around this limit. Additional services with official Atlassian Statuspage feeds can be added via a separate script following the same pattern as `check_epic.py`.
+ 
 ---
+
 
 ## Status Values
 
@@ -41,98 +45,91 @@ Every 10 minutes, GitHub Actions:
 ---
 
 ## Tech Stack
-
-- **Python 3** — stdlib only, no pip/requirements needed
-- **GitHub Actions** — scheduler + runner (free tier)
-- **StatusGator** — monitoring platform (free tier, 3 monitors)
-- **Telegram Bot API** — push notifications
-
+ 
+- **Python 3** -- stdlib only, no pip or requirements file needed
+- **GitHub Actions** -- scheduler and runner (free tier)
+- **StatusGator** -- monitoring platform (free tier, 3 monitors)
+- **Telegram Bot API** -- push notifications
 ---
-
+ 
 ## Repository Structure
-
+ 
 ```
 .
-├── .github/
-│   └── workflows/
-│       └── monitor.yml       # GitHub Actions workflow
-├── scripts/
-│   └── check_status.py       # Main monitoring script
-├── state.json                 # Last known status per service (auto-updated)
-├── config.json                # list of monitored services
-└── README.md
++-- .github/
+|   +-- workflows/
+|       +-- monitor.yml         # GitHub Actions workflow
++-- scripts/
+|   +-- check_status.py         # StatusGator monitor (Ubisoft, Steam, EA)
+|   +-- check_epic.py           # Epic Games Store direct monitor
++-- config.json                 # Service match config for check_status.py
++-- state.json                  # Last known status per service (auto-updated)
++-- README.md
 ```
-
+ 
 ---
-
+ 
 ## Setup Guide
-
+ 
 ### 1. StatusGator
-
+ 
 1. Create a free account at [statusgator.com](https://statusgator.com)
-2. Create a board (e.g. `gaming`)
+2. Create a board
 3. Add monitors:
-   - **Ubisoft** → Service monitor (search for Ubisoft)
-   - **Steam** → Website monitor → `https://store.steampowered.com`
-4. Go to **API** in the left sidebar → generate a **Read-only** token
-   - Name it something descriptive, e.g. `github-actions-monitor`
-   - Set an expiry (1 year recommended)
-
+   - **Ubisoft** -- Service monitor (search for Ubisoft)
+   - **Steam** -- Website monitor -- `https://store.steampowered.com`
+   - **EA** -- Service monitor (search for Electronic Arts), monitor all components
+4. Go to **API** in the left sidebar and generate a **Read-only** token
+   - Set a name and an expiry (1 year recommended)
 ### 2. Telegram Bot
-
-1. Open Telegram → search for **@BotFather**
+ 
+1. Open Telegram and search for **@BotFather**
 2. Send `/newbot` and follow the prompts
-3. Copy the **bot token** BotFather gives you
-4. Search for your new bot → tap **Start** → send any message
-5. Open in browser (replace `YOUR_TOKEN`):
+3. Copy the bot token BotFather provides
+4. Search for your new bot, tap **Start**, and send any message
+5. Open this URL in a browser (replace `YOUR_TOKEN`):
    ```
    https://api.telegram.org/botYOUR_TOKEN/getUpdates
    ```
-6. Find `"chat": { "id": XXXXXXXXX }` — that is your **chat ID**
-
-**Optional hardening:**
-- In BotFather → `/mybots` → your bot → **Bot Settings** → **Allow Groups** → **Turn off**
-- The bot only ever *sends* to your chat ID it never reads or responds to messages
-
+6. Find `"chat": { "id": XXXXXXXXX }` -- that number is your chat ID
+Optional hardening: in BotFather go to `/mybots` -> your bot -> **Bot Settings** -> **Allow Groups** -> **Turn off**. The bot only ever sends to your chat ID and never reads or responds to incoming messages.
+ 
 ### 3. GitHub Secrets
-
-In your repo → **Settings → Secrets and variables → Actions**, add:
-
+ 
+In your repo go to **Settings -> Secrets and variables -> Actions** and add:
+ 
 | Secret name | Value |
 |-------------|-------|
 | `STATUSGATOR_TOKEN` | Your StatusGator API token |
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token from BotFather |
 | `TELEGRAM_CHAT_ID` | Your numeric Telegram chat ID |
-
+ 
 ### 4. Initial state.json
-
-Create `state.json` in the repo root with empty content:
-
+ 
+Create `state.json` in the repo root:
+ 
 ```json
 {}
 ```
-
-The script will populate it on the first run.
-
+ 
+The scripts populate it on the first run.
+ 
 ### 5. Workflow permissions
-
-The workflow commits `state.json` back to the repo after each run. Make sure **Actions** have write access:
-
-Repo → **Settings → Actions → General → Workflow permissions** → select **Read and write permissions**
-
+ 
+The workflow commits `state.json` back to the repo after each run. Enable write access under:
+ 
+Repo -> **Settings -> Actions -> General -> Workflow permissions** -> **Read and write permissions**
+ 
 ---
-
+ 
 ## Running Manually
-
-Go to **Actions → Service Status Monitor → Run workflow** to trigger immediately without waiting for the 10-minute schedule.
-
-Useful for:
-- Testing after setup
-- Forcing a recheck after a known outage
-
+ 
+Go to **Actions -> Service Status Monitor -> Run workflow** to trigger immediately without waiting for the schedule. Useful for testing after setup or forcing a recheck after a known outage.
+ 
 ---
-
+ 
 ## Example Telegram Notifications
+
 
 **Outage detected:**
 ```
@@ -152,34 +149,34 @@ Was: ⚠️ WARN  →  Now: ✅ UP
 ---
 
 ## Timezone
-
-Timestamps are displayed in **CET/CEST** (Central European Time), switching automatically between UTC+1 and UTC+2 based on EU daylight saving rules - no manual adjustment needed.
-
+ 
+Timestamps are displayed in CET/CEST (Central European Time), switching automatically between UTC+1 and UTC+2 based on EU daylight saving rules.
+ 
 ---
-
+ 
 ## Limitations
-
-- GitHub Actions scheduled workflows can lag a few minutes under load - this is a monitoring tool for gaming services, not a production SLA alerter
-- StatusGator free tier: **3 monitors maximum**
-- Steam has no official status page — the Website monitor is an HTTP probe only, not a granular service health feed
-
+ 
+- GitHub Actions scheduled workflows can lag a few minutes under load. This is a personal convenience tool, not a production SLA alerter.
+- StatusGator free tier is capped at 3 monitors.
+- Steam has no official status page. The website monitor is an HTTP probe only, not a granular service health feed.
 ---
-
+ 
 ## Extending to More Services
-
-Services with official **Atlassian Statuspage** feeds can be added without scraping:
-
+ 
+To add a service that has an official Atlassian Statuspage feed, create a new script following the pattern of `check_epic.py` and add a step to `monitor.yml`. No changes to existing scripts needed.
+ 
+Services with known Atlassian Statuspage feeds:
+ 
 | Service | Status page |
 |---------|------------|
 | GitHub | `githubstatus.com` |
 | Xbox Live | `support.xbox.com/xbox-live-status` |
-| Epic Games | `status.epicgames.com` |
 | Rockstar Games | `support.rockstargames.com/servicestatus` |
-
-Add them as **Service monitors** in StatusGator (requires upgrading past the 3-monitor free tier), then add their lowercase name to the `WATCHED` set in `check_status.py`.
-
+ 
+To add a service via StatusGator instead, add it as a Service monitor on your board, then add its lowercase name to `config.json`.
+ 
 ---
-
+ 
 ## License
-
+ 
 MIT
