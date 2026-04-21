@@ -1,10 +1,16 @@
 """
-StatusGator API PoC — Ubisoft + Steam monitor status fetch
-Uses correct V3 board-based endpoints.
+Service Status Monitor — Ubisoft + Steam
+Fetches monitor statuses from StatusGator API V3.
+Detects transitions and sends Telegram notifications.
+Commits updated state.json back to repo via git.
+
+Secrets required (GitHub Actions):
+    STATUSGATOR_TOKEN
+    TELEGRAM_BOT_TOKEN
+    TELEGRAM_CHAT_ID
 
 Usage:
-    export STATUSGATOR_TOKEN=your_token_here
-    python check_status.py
+    python scripts/check_status.py
 """
 
 import os
@@ -13,111 +19,216 @@ import json
 import http.client
 from datetime import datetime, timezone
 
-HOST = "statusgator.com"
-API_BASE = "/api/v3"
-TOKEN = os.environ.get("STATUSGATOR_TOKEN", "")
+# ── Config ────────────────────────────────────────────────
+HOST            = "statusgator.com"
+API_BASE        = "/api/v3"
+STATUSGATOR_TOKEN = os.environ.get("STATUSGATOR_TOKEN", "")
+TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT   = os.environ.get("TELEGRAM_CHAT_ID", "")
+STATE_FILE      = "state.json"
+WATCHED         = {"steam", "ubisoft"}
 
-WATCHED = {"steam", "ubisoft"}
-
+# ── Status display ────────────────────────────────────────
 STATUS_EMOJI = {
     "up":          "✅",
-    "warn":        "⚠️ ",
+    "warn":        "⚠️",
     "down":        "🔴",
     "maintenance": "🔧",
+    "unknown":     "❓",
 }
 
+# Statuses that mean something is wrong
+PROBLEM_STATUSES = {"warn", "down", "maintenance"}
 
-def api_get(path: str):
-    """Make an authenticated GET request. Returns (http_status, parsed_json)."""
-    conn = http.client.HTTPSConnection(HOST, timeout=15)
-    conn.request("GET", f"{API_BASE}{path}", headers={
-        "Authorization": f"Bearer {TOKEN}",
-        "Accept": "application/json",
+
+# ── Helpers ───────────────────────────────────────────────
+def api_get(host: str, path: str, token: str):
+    """Authenticated GET, returns (http_status, parsed_json)."""
+    conn = http.client.HTTPSConnection(host, timeout=15)
+    conn.request("GET", path, headers={
+        "Authorization": f"Bearer {token}",
+        "Accept":        "application/json",
     })
     resp = conn.getresponse()
-    raw = resp.read().decode()
+    raw  = resp.read().decode()
     conn.close()
     return resp.status, json.loads(raw)
 
 
+def send_telegram(message: str):
+    """Send a message to Telegram. Returns True on success."""
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
+        print("⚠️  Telegram not configured — skipping notification")
+        return False
+
+    payload = json.dumps({
+        "chat_id": TELEGRAM_CHAT,
+        "text":    message,
+        "parse_mode": "HTML",
+    }).encode()
+
+    conn = http.client.HTTPSConnection("api.telegram.org", timeout=15)
+    conn.request(
+        "POST",
+        f"/bot{TELEGRAM_TOKEN}/sendMessage",
+        body=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    resp = conn.getresponse()
+    raw  = resp.read().decode()
+    conn.close()
+
+    if resp.status == 200:
+        return True
+    else:
+        print(f"⚠️  Telegram error HTTP {resp.status}: {raw[:200]}")
+        return False
+
+
+def load_state() -> dict:
+    """Load previous state from file. Returns empty dict if not found."""
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    return {}
+
+
+def save_state(state: dict):
+    """Persist current state to file."""
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
+    print(f"💾  State saved → {STATE_FILE}")
+
+
+def build_message(name: str, old_status: str, new_status: str, last_msg: str, ts: str) -> str:
+    """Build a Telegram notification message."""
+    emoji     = STATUS_EMOJI.get(new_status, "❓")
+    old_emoji = STATUS_EMOJI.get(old_status, "❓")
+
+    if new_status in PROBLEM_STATUSES:
+        header = f"{emoji} <b>{name.upper()} — {new_status.upper()}</b>"
+    else:
+        header = f"{emoji} <b>{name.upper()} — RECOVERED</b>"
+
+    lines = [
+        header,
+        f"Was: {old_emoji} {old_status.upper()}  →  Now: {emoji} {new_status.upper()}",
+    ]
+    if last_msg and last_msg != "—":
+        lines.append(f"ℹ️ {last_msg}")
+    lines.append(f"🕐 {ts} UTC")
+    return "\n".join(lines)
+
+
+# ── Main ──────────────────────────────────────────────────
 def main():
-    if not TOKEN:
-        print("❌  STATUSGATOR_TOKEN env var not set.")
-        print("    Run: export STATUSGATOR_TOKEN=your_token_here")
+    # Validate secrets
+    missing = [n for n, v in [
+        ("STATUSGATOR_TOKEN", STATUSGATOR_TOKEN),
+        ("TELEGRAM_BOT_TOKEN", TELEGRAM_TOKEN),
+        ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT),
+    ] if not v]
+    if missing:
+        print(f"❌  Missing env vars: {', '.join(missing)}")
         sys.exit(1)
 
-    print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC]\n")
+    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{now_ts} UTC]\n")
 
-    # Step 1 — get boards
+    # ── Fetch boards ──────────────────────────────────────
     print("Step 1: Fetching boards...")
-    http_status, body = api_get("/boards?per_page=25")
+    http_status, body = api_get(HOST, f"{API_BASE}/boards?per_page=25", STATUSGATOR_TOKEN)
 
     if http_status != 200:
-        print(f"❌  HTTP {http_status} — {body}")
+        print(f"❌  Boards API HTTP {http_status}: {str(body)[:300]}")
         sys.exit(1)
 
     boards = body.get("data", [])
     if not boards:
-        print("❌  No boards found. Create a board in StatusGator and add your monitors to it.")
+        print("❌  No boards found in StatusGator.")
         sys.exit(1)
 
-    # Use first board (PoC assumes one board)
-    board = boards[0]
+    board    = boards[0]
     board_id = board["id"]
-    board_name = board["name"]
-    print(f"✅  Found board: '{board_name}' (id: {board_id})\n")
+    print(f"✅  Board: '{board['name']}' (id: {board_id})\n")
 
-    # Step 2 — get monitors for that board
+    # ── Fetch monitors ────────────────────────────────────
     print("Step 2: Fetching monitors...")
-    http_status, body = api_get(f"/boards/{board_id}/monitors")
+    http_status, body = api_get(HOST, f"{API_BASE}/boards/{board_id}/monitors", STATUSGATOR_TOKEN)
 
     if http_status != 200:
-        print(f"❌  HTTP {http_status} — {body}")
+        print(f"❌  Monitors API HTTP {http_status}: {str(body)[:300]}")
         sys.exit(1)
 
     monitors = body.get("data", [])
     print(f"✅  Found {len(monitors)} monitor(s)\n")
 
-    # Step 3 — filter to watched services and report
+    # ── Parse watched services ────────────────────────────
+    current = {}
+    for m in monitors:
+        name       = (m.get("display_name") or "").strip()
+        name_lower = name.lower()
+        if any(w in name_lower for w in WATCHED):
+            current[name_lower] = {
+                "name":         name,
+                "status":       (m.get("filtered_status") or "unknown").lower(),
+                "last_message": m.get("last_message") or "—",
+            }
+
+    # ── Print current statuses ────────────────────────────
     print("=" * 45)
     print("  SERVICE STATUS REPORT")
     print("=" * 45)
+    for key, data in current.items():
+        emoji = STATUS_EMOJI.get(data["status"], "❓")
+        print(f"\n  {emoji}  {data['name']}")
+        print(f"      Status : {data['status'].upper()}")
+        print(f"      Message: {data['last_message']}")
+    print("\n" + "=" * 45 + "\n")
 
-    found = {}
-    for m in monitors:
-        name = (m.get("display_name") or "").strip()
-        name_lower = name.lower()
+    # ── Load previous state and detect transitions ────────
+    previous = load_state()
+    transitions = []
 
-        if any(w in name_lower for w in WATCHED):
-            status_val = (m.get("filtered_status") or "unknown").lower()
-            emoji = STATUS_EMOJI.get(status_val, "❓")
-            last_msg = m.get("last_message") or "—"
-            monitor_type = m.get("monitor_type", "")
+    for key, data in current.items():
+        old_status = previous.get(key, {}).get("status", "unknown")
+        new_status = data["status"]
 
-            print(f"\n  {emoji}  {name}")
-            print(f"      Status : {status_val.upper()}")
-            print(f"      Type   : {monitor_type}")
-            print(f"      Message: {last_msg}")
+        if old_status != new_status:
+            transitions.append({
+                "name":       data["name"],
+                "key":        key,
+                "old_status": old_status,
+                "new_status": new_status,
+                "last_msg":   data["last_message"],
+            })
+            print(f"🔄  Transition: {data['name']} — {old_status.upper()} → {new_status.upper()}")
+        else:
+            print(f"➡️   No change:  {data['name']} — {new_status.upper()}")
 
-            found[name_lower] = {
-                "name": name,
-                "status": status_val,
-                "last_message": last_msg,
-            }
+    # ── Send Telegram notifications ───────────────────────
+    if transitions:
+        print(f"\n📣  Sending {len(transitions)} Telegram notification(s)...")
+        for t in transitions:
+            msg = build_message(
+                name=t["name"],
+                old_status=t["old_status"],
+                new_status=t["new_status"],
+                last_msg=t["last_msg"],
+                ts=now_ts,
+            )
+            print(f"\n--- Message ---\n{msg}\n---------------")
+            ok = send_telegram(msg)
+            print("✅  Sent" if ok else "❌  Failed to send")
+    else:
+        print("\n🔕  No transitions — no notifications sent")
 
-    print("\n" + "=" * 45)
-
-    # Report anything not found
-    for w in WATCHED:
-        if not any(w in k for k in found):
-            print(f"  ❓  '{w}' — not found in board monitors")
-            print(f"       Make sure it's added to board '{board_name}' in StatusGator")
-
-    # Save full raw monitor list for inspection
-    out = "statusgator_raw.json"
-    with open(out, "w") as f:
-        json.dump(monitors, f, indent=2)
-    print(f"\n📄  Full monitor data saved → {out}")
+    # ── Save updated state ────────────────────────────────
+    new_state = {
+        key: {"status": data["status"], "since": now_ts}
+        for key, data in current.items()
+    }
+    save_state(new_state)
 
 
 if __name__ == "__main__":
