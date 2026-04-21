@@ -17,7 +17,7 @@ import os
 import sys
 import json
 import http.client
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ── Config ────────────────────────────────────────────────
 HOST            = "statusgator.com"
@@ -116,7 +116,7 @@ def build_message(name: str, old_status: str, new_status: str, last_msg: str, ts
     ]
     if last_msg and last_msg != "—":
         lines.append(f"ℹ️ {last_msg}")
-    lines.append(f"🕐 {ts} UTC")
+    lines.append(f"🕐 {ts}")
     return "\n".join(lines)
 
 
@@ -132,8 +132,31 @@ def main():
         print(f"❌  Missing env vars: {', '.join(missing)}")
         sys.exit(1)
 
-    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now_ts} UTC]\n")
+    # Auto-detect CET (UTC+1) vs CEST (UTC+2)
+    # CEST: last Sunday of March → last Sunday of October
+    now_utc = datetime.now(timezone.utc)
+    year = now_utc.year
+
+    def last_sunday(y, month):
+        # Find last Sunday of given month
+        import calendar
+        last_day = calendar.monthrange(y, month)[1]
+        d = datetime(y, month, last_day)
+        return d - timedelta(days=d.weekday() + 1) if d.weekday() != 6 else d
+
+    cest_start = last_sunday(year, 3).replace(hour=1, tzinfo=timezone.utc)   # last Sun March 01:00 UTC
+    cest_end   = last_sunday(year, 10).replace(hour=1, tzinfo=timezone.utc)  # last Sun October 01:00 UTC
+
+    if cest_start <= now_utc < cest_end:
+        tz_offset = timedelta(hours=2)
+        tz_label  = "CEST"
+    else:
+        tz_offset = timedelta(hours=1)
+        tz_label  = "CET"
+
+    now_local = now_utc + tz_offset
+    now_ts    = f"{now_local.strftime('%Y-%m-%d %H:%M:%S')} {tz_label}"
+    print(f"[{now_ts}]\n")
 
     # ── Fetch boards ──────────────────────────────────────
     print("Step 1: Fetching boards...")
