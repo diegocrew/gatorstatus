@@ -26,7 +26,7 @@ STATUSGATOR_TOKEN = os.environ.get("STATUSGATOR_TOKEN", "")
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT   = os.environ.get("TELEGRAM_CHAT_ID", "")
 STATE_FILE      = "state.json"
-WATCHED         = {"steam", "ubisoft"}
+WATCHED         = {"steam", "ubisoft", "ea"}
 
 # ── Status display ────────────────────────────────────────
 STATUS_EMOJI = {

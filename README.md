@@ -23,8 +23,9 @@ Every 10 minutes, GitHub Actions:
 |---------|-------------|--------|
 | Ubisoft Connect | Service monitor | Official Ubisoft status page via StatusGator |
 | Steam | Website monitor | HTTP probe via StatusGator |
+| EA / Electronic Arts | Service monitor | Official EA status page via StatusGator (21 components) |
 
-> Easily extendable — services with official Atlassian Statuspage feeds (GitHub, Xbox, Meta, LinkedIn) can be added with minimal changes.
+> Free tier maxed at 3 monitors. Easily extendable with a paid StatusGator plan — services with official Atlassian Statuspage feeds (GitHub, Xbox, Epic Games) can be added with minimal code changes.
 
 ---
 
@@ -171,10 +172,10 @@ Services with official **Atlassian Statuspage** feeds can be added without scrap
 |---------|------------|
 | GitHub | `githubstatus.com` |
 | Xbox Live | `support.xbox.com/xbox-live-status` |
-| Meta / Facebook | `metastatus.com` |
-| LinkedIn | `www.linkedin-apistatus.com` |
+| Epic Games | `status.epicgames.com` |
+| Rockstar Games | `support.rockstargames.com/servicestatus` |
 
-Add them as **Service monitors** in StatusGator (uses your remaining free monitor slot or upgrade), then add their names to the `WATCHED` set in `check_status.py`.
+Add them as **Service monitors** in StatusGator (requires upgrading past the 3-monitor free tier), then add their lowercase name to the `WATCHED` set in `check_status.py`.
 
 ---
 
