@@ -1,19 +1,19 @@
 {
   "ea": {
     "status": "up",
-    "since": "2026-04-22 07:51:13 CEST"
+    "since": "2026-04-22 09:28:52 CEST"
   },
   "steam": {
     "status": "up",
-    "since": "2026-04-22 07:51:13 CEST"
+    "since": "2026-04-22 09:28:52 CEST"
   },
   "ubisoft": {
     "status": "up",
-    "since": "2026-04-22 07:51:13 CEST"
+    "since": "2026-04-22 09:28:52 CEST"
   },
   "epic_store": {
     "status": "up",
     "raw_status": "operational",
-    "since": "2026-04-22 07:51:13 CEST"
+    "since": "2026-04-22 09:28:52 CEST"
   }
 }
