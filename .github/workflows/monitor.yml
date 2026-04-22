@@ -9,11 +9,16 @@ jobs:
   check-status:
     runs-on: ubuntu-latest
     permissions:
-      contents: write         # needed to commit state.json back to repo
+      contents: write
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Pull latest state
+        run: git pull origin ${{ github.ref_name }}
 
       - name: Check StatusGator services (Ubisoft, Steam, EA)
         env:
