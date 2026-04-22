@@ -23,6 +23,7 @@ EPIC_PATH       = "/api/v2/summary.json"
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT   = os.environ.get("TELEGRAM_CHAT_ID", "")
 STATE_FILE      = "state.json"
+HISTORY_FILE    = "history.ndjson"
 SERVICE_KEY     = "epic_store"
 SERVICE_NAME    = "Epic Games Store"
 
@@ -133,6 +134,12 @@ def save_state(state: dict):
     print(f"💾  State saved → {STATE_FILE}")
 
 
+def append_history(entry: dict):
+    with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+    print(f"📜  History updated → {HISTORY_FILE}")
+
+
 def build_message(old_status: str, new_status: str, ts: str) -> str:
     emoji     = STATUS_EMOJI.get(new_status, "❓")
     old_emoji = STATUS_EMOJI.get(old_status, "❓")
@@ -211,13 +218,14 @@ def main():
         print(f"➡️   No change: {SERVICE_NAME} — {simple_status.upper()}")
         print("🔕  No notification sent")
 
-    # Update state
+    # Update state + history
     state[SERVICE_KEY] = {
         "status":     simple_status,
         "raw_status": raw_status,
         "since":      now_ts,
     }
     save_state(state)
+    append_history({"ts": now_ts, "service": SERVICE_KEY, "status": simple_status})
 
 
 if __name__ == "__main__":

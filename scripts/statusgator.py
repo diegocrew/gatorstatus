@@ -18,6 +18,7 @@ STATUSGATOR_TOKEN = os.environ.get("STATUSGATOR_TOKEN", "")
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT   = os.environ.get("TELEGRAM_CHAT_ID", "")
 STATE_FILE      = "state.json"
+HISTORY_FILE    = "history.ndjson"
 CONFIG_FILE     = "config.json"
 
 
@@ -104,6 +105,14 @@ def save_state(state: dict):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
     print(f"💾  State saved → {STATE_FILE}")
+
+
+def append_history(entries: list):
+    """Append one line per service check to history.ndjson."""
+    with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+        for entry in entries:
+            f.write(json.dumps(entry) + "\n")
+    print(f"📜  History updated → {HISTORY_FILE} ({len(entries)} entries)")
 
 
 def build_message(name: str, old_status: str, new_status: str, last_msg: str, ts: str) -> str:
@@ -258,11 +267,17 @@ def main():
     else:
         print("\n🔕  No transitions — no notifications sent")
 
-    # ── Save updated state ────────────────────────────────
+    # ── Save updated state + history ─────────────────────
     new_state = dict(previous)  # preserve keys from other scripts (e.g. epic_store)
     for key, data in current.items():
         new_state[key] = {"status": data["status"], "since": now_ts}
     save_state(new_state)
+
+    history_entries = [
+        {"ts": now_ts, "service": key, "status": data["status"]}
+        for key, data in current.items()
+    ]
+    append_history(history_entries)
 
 
 if __name__ == "__main__":
