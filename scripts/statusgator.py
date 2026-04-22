@@ -259,10 +259,9 @@ def main():
         print("\n🔕  No transitions — no notifications sent")
 
     # ── Save updated state ────────────────────────────────
-    new_state = {
-        key: {"status": data["status"], "since": now_ts}
-        for key, data in current.items()
-    }
+    new_state = dict(previous)  # preserve keys from other scripts (e.g. epic_store)
+    for key, data in current.items():
+        new_state[key] = {"status": data["status"], "since": now_ts}
     save_state(new_state)
 
 
