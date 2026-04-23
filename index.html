@@ -70,10 +70,11 @@
 
     .svc-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 1.25rem;
     }
-    @media (max-width: 620px) { .svc-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .svc-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .svc-grid { grid-template-columns: 1fr; } }
 
     .svc-card {
       background: var(--surface);
@@ -113,10 +114,12 @@
 
 <script>
 const SERVICES = [
-  { key: 'ea',         name: 'EA',         color: '#60a5fa' },
-  { key: 'steam',      name: 'Steam',      color: '#c084fc' },
-  { key: 'ubisoft',    name: 'Ubisoft',    color: '#fb923c' },
-  { key: 'epic_store', name: 'Epic Store', color: '#34d399' }
+  { key: 'ea',         name: 'EA',                  color: '#60a5fa' },
+  { key: 'steam',      name: 'Steam',               color: '#c084fc' },
+  { key: 'ubisoft',    name: 'Ubisoft',             color: '#fb923c' },
+  { key: 'epic_store', name: 'Epic Store',          color: '#34d399' },
+  { key: 'psn',        name: 'PlayStation Network', color: '#38bdf8' },
+  { key: 'discord',    name: 'Discord',             color: '#a78bfa' }
 ];
 
 // Status → numeric y value
@@ -215,7 +218,7 @@ function renderSummaryChart(range) {
 
   // Small per-service y-offset so overlapping lines (all "Up" etc.) stay visible.
   // Tooltip rounds back to the nearest integer so labels stay correct.
-  const OFFSETS = [0, 0.07, 0.14, 0.21];
+  const OFFSETS = [0, 0.05, 0.10, 0.15, 0.20, 0.25];
 
   const datasets = SERVICES.map((svc, i) => {
     const data = allRecords
