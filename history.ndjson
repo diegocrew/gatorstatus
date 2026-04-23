@@ -70,3 +70,7 @@
 {"ts": "2026-04-23 08:22:41 CEST", "service": "steam", "status": "up"}
 {"ts": "2026-04-23 08:22:41 CEST", "service": "ubisoft", "status": "up"}
 {"ts": "2026-04-23 08:22:42 CEST", "service": "epic_store", "status": "up"}
+{"ts": "2026-04-23 10:18:06 CEST", "service": "ea", "status": "maintenance"}
+{"ts": "2026-04-23 10:18:06 CEST", "service": "steam", "status": "up"}
+{"ts": "2026-04-23 10:18:06 CEST", "service": "ubisoft", "status": "up"}
+{"ts": "2026-04-23 10:18:06 CEST", "service": "epic_store", "status": "up"}
