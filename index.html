@@ -189,7 +189,7 @@ function xScale(range) {
 }
 
 let allRecords = [];
-let activeRange = 'month';
+let activeRange = 'day';
 const charts = {};
 
 async function loadData() {
@@ -213,10 +213,14 @@ function renderSummaryChart(range) {
   const canvas = document.getElementById('summary-chart');
   if (charts.summary) charts.summary.destroy();
 
-  const datasets = SERVICES.map(svc => {
+  // Small per-service y-offset so overlapping lines (all "Up" etc.) stay visible.
+  // Tooltip rounds back to the nearest integer so labels stay correct.
+  const OFFSETS = [0, 0.07, 0.14, 0.21];
+
+  const datasets = SERVICES.map((svc, i) => {
     const data = allRecords
       .filter(r => r.service === svc.key && parseTs(r.ts).getTime() >= ws)
-      .map(r => ({ x: parseTs(r.ts).getTime(), y: sy(r.status) }));
+      .map(r => ({ x: parseTs(r.ts).getTime(), y: sy(r.status) + OFFSETS[i] }));
     return {
       label: svc.name,
       data,
@@ -247,7 +251,11 @@ function renderSummaryChart(range) {
         tooltip: {
           callbacks: {
             title: items => fmtTick(items[0].parsed.x, range),
-            label: item => ` ${item.dataset.label}: ${['Down','Partial','Up'][item.parsed.y] ?? '?'}`
+            // Round off the offset to get the real status label
+            label: item => {
+              const real = Math.round(item.parsed.y);
+              return ` ${item.dataset.label}: ${['Down','Partial','Up'][real] ?? '?'}`;
+            }
           }
         }
       },
