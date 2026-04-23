@@ -24,28 +24,27 @@ HISTORY_FILE   = "history.ndjson"
 SERVICE_KEY    = "discord"
 SERVICE_NAME   = "Discord"
 
-# Atlassian top-level indicator → simplified status used throughout the project
+# Used only on the first line of Telegram messages
+STATUS_EMOJI = {
+    "up":          "✅",
+    "warn":        "⚠️",
+    "down":        "🔴",
+    "maintenance": "🔧",
+    "unknown":     "❓",
+}
+
 INDICATOR_MAP = {
     "none":        "up",
     "minor":       "warn",
     "major":       "down",
     "critical":    "down",
-    "maintenance": "maintenance",   # synthetic — set when a maintenance is in_progress
-}
-
-INDICATOR_EMOJI = {
-    "none":        "✅",
-    "minor":       "⚠️",
-    "major":       "🔴",
-    "critical":    "🔴",
-    "maintenance": "🔧",
+    "maintenance": "maintenance",
 }
 
 PROBLEM_STATUSES = {"warn", "down", "maintenance"}
 
 
 def local_timestamp() -> tuple[str, str]:
-    """Return (formatted_timestamp, tz_label) in CET or CEST."""
     now_utc = datetime.now(timezone.utc)
     year = now_utc.year
 
@@ -68,20 +67,22 @@ def local_timestamp() -> tuple[str, str]:
 
 def fetch_summary() -> dict:
     conn = http.client.HTTPSConnection(HOST, timeout=15)
-    conn.request("GET", PATH, headers={"Accept": "application/json",
-                                        "User-Agent": "gatorstatus-monitor/1.0"})
+    conn.request("GET", PATH, headers={
+        "Accept":     "application/json",
+        "User-Agent": "Mozilla/5.0 (compatible; gatorstatus/1.0)"
+    })
     resp = conn.getresponse()
     raw  = resp.read().decode()
     conn.close()
     if resp.status != 200:
-        print(f"❌  {SERVICE_NAME} API HTTP {resp.status}")
+        print(f"ERROR: {SERVICE_NAME} API HTTP {resp.status}")
         sys.exit(1)
     return json.loads(raw)
 
 
 def send_telegram(message: str) -> bool:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
-        print("⚠️  Telegram not configured — skipping")
+        print("Telegram not configured — skipping")
         return False
     payload = json.dumps({
         "chat_id":    TELEGRAM_CHAT,
@@ -97,7 +98,7 @@ def send_telegram(message: str) -> bool:
     conn.close()
     if resp.status == 200:
         return True
-    print(f"⚠️  Telegram error HTTP {resp.status}: {raw[:200]}")
+    print(f"Telegram error HTTP {resp.status}: {raw[:200]}")
     return False
 
 
@@ -111,36 +112,35 @@ def load_state() -> dict:
 def save_state(state: dict):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
-    print(f"💾  State saved → {STATE_FILE}")
+    print(f"State saved -> {STATE_FILE}")
 
 
 def append_history(entry: dict):
     with open(HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
-    print(f"📜  History updated → {HISTORY_FILE}")
+    print(f"History updated -> {HISTORY_FILE}")
 
 
 def build_message(old_ind: str, new_ind: str, ts: str) -> str:
     old_simple = INDICATOR_MAP.get(old_ind, old_ind)
     new_simple = INDICATOR_MAP.get(new_ind, new_ind)
-    old_emoji  = INDICATOR_EMOJI.get(old_ind, "❓")
-    new_emoji  = INDICATOR_EMOJI.get(new_ind, "❓")
+    emoji      = STATUS_EMOJI.get(new_simple, "")
 
     if new_simple in PROBLEM_STATUSES:
-        header = f"{new_emoji} <b>{SERVICE_NAME.upper()} — {new_simple.upper()}</b>"
+        header = f"{emoji} <b>{SERVICE_NAME.upper()} — {new_simple.upper()}</b>"
     else:
-        header = f"{new_emoji} <b>{SERVICE_NAME.upper()} — RECOVERED</b>"
+        header = f"{emoji} <b>{SERVICE_NAME.upper()} — RECOVERED</b>"
 
     return "\n".join([
         header,
-        f"Was: {old_emoji} {old_simple.upper()}  →  Now: {new_emoji} {new_simple.upper()}",
-        f"🕐 {ts}",
+        f"Was: {old_simple.upper()}  ->  Now: {new_simple.upper()}",
+        ts,
     ])
 
 
 def main():
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
-        print("❌  Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
+        print("ERROR: Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
         sys.exit(1)
 
     now_ts, _ = local_timestamp()
@@ -150,35 +150,32 @@ def main():
     data      = fetch_summary()
     indicator = data.get("status", {}).get("indicator", "none")
 
-    # Promote to maintenance if a scheduled maintenance window is currently active
     maintenances = data.get("scheduled_maintenances", [])
     if indicator == "none" and any(m.get("status") == "in_progress" for m in maintenances):
         indicator = "maintenance"
 
     simple_status = INDICATOR_MAP.get(indicator, "unknown")
-    emoji         = INDICATOR_EMOJI.get(indicator, "✅")
 
     print(f"\n{'=' * 45}")
     print(f"  {SERVICE_NAME.upper()} STATUS")
     print(f"{'=' * 45}")
-    print(f"\n  {emoji}  {SERVICE_NAME}")
+    print(f"\n  {SERVICE_NAME}")
     print(f"      Status    : {simple_status.upper()}")
     print(f"      Indicator : {indicator}")
     print(f"\n{'=' * 45}\n")
 
-    # Load full state — only touch our own key, leave all other services intact
     state   = load_state()
     old_ind = state.get(SERVICE_KEY, {}).get("raw_status", "unknown")
 
     if old_ind != indicator:
-        print(f"🔄  Transition: {old_ind} → {indicator}")
+        print(f"Transition: {old_ind} -> {indicator}")
         msg = build_message(old_ind, indicator, now_ts)
         print(f"\n--- Message ---\n{msg}\n---------------")
         ok = send_telegram(msg)
-        print("✅  Sent" if ok else "❌  Failed to send")
+        print("Sent" if ok else "Failed to send")
     else:
-        print(f"➡️   No change: {SERVICE_NAME} — {simple_status.upper()}")
-        print("🔕  No notification sent")
+        print(f"No change: {SERVICE_NAME} — {simple_status.upper()}")
+        print("No notification sent")
 
     state[SERVICE_KEY] = {
         "status":     simple_status,

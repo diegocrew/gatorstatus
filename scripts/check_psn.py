@@ -3,8 +3,8 @@ PlayStation Network Status Monitor
 Fetches status from status.playstation.com/data/statuses/region/SCEE.json
 Sony's own format (NOT Atlassian Statuspage).
 - Empty status arrays across all services = operational (up)
-- Any entry with statusType "Outage" = down
-- Any entry with statusType "Maintenance" = maintenance (if no outage)
+- Any entry with statusType "Outage" (within last STALE_DAYS) = down
+- Any entry with statusType "Maintenance" (within last STALE_DAYS) = maintenance
 
 Only modifies the 'psn' key in state.json; all other service keys are preserved.
 HTTP errors are non-fatal: workflow continues, nothing written to state/history.
@@ -32,6 +32,7 @@ HISTORY_FILE   = "history.ndjson"
 SERVICE_KEY    = "psn"
 SERVICE_NAME   = "PlayStation Network"
 
+# Used only on the first line of Telegram messages
 STATUS_EMOJI = {
     "up":          "✅",
     "warn":        "⚠️",
@@ -76,27 +77,22 @@ def fetch_psn_status() -> dict | None:
         raw  = resp.read().decode()
         conn.close()
         if resp.status != 200:
-            print(f"⚠️   {SERVICE_NAME} API HTTP {resp.status} — skipping this run")
+            print(f"WARNING: {SERVICE_NAME} API HTTP {resp.status} — skipping this run")
             return None
         return json.loads(raw)
     except Exception as e:
-        print(f"⚠️   {SERVICE_NAME} fetch error: {e} — skipping this run")
+        print(f"WARNING: {SERVICE_NAME} fetch error: {e} — skipping this run")
         return None
 
 
 def extract_status(data: dict) -> str:
     """
-    Walk all countries → services → resources in the Sony status payload.
-    Any non-empty status array with statusType containing 'outage' → 'down'.
-    Any non-empty status array with statusType containing 'maintenance' → 'maintenance'.
-    All empty (or only stale entries) → 'up'.
-
-    Sony's API keeps historical outage entries in place indefinitely without
-    marking them resolved. We filter out anything older than STALE_DAYS to avoid
-    false positives from stale data that the website itself no longer shows.
+    Walk all countries -> services -> resources in the Sony status payload.
+    Sony keeps historical outage entries indefinitely without marking them resolved,
+    so only entries within STALE_DAYS are considered to avoid false positives.
     """
-    STALE_DAYS  = 7
-    cutoff      = datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)
+    STALE_DAYS      = 7
+    cutoff          = datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)
     has_outage      = False
     has_maintenance = False
 
@@ -105,13 +101,13 @@ def extract_status(data: dict) -> str:
         try:
             return datetime.fromisoformat(raw) >= cutoff
         except (ValueError, AttributeError):
-            return True  # unparseable → assume live (safe default)
+            return True  # unparseable -> assume live (safe default)
 
     def check_statuses(status_list: list):
         nonlocal has_outage, has_maintenance
         for entry in status_list:
             if not is_recent(entry):
-                continue  # skip stale historical entries
+                continue
             t = entry.get("statusType", "").lower()
             if "outage" in t:
                 has_outage = True
@@ -134,7 +130,7 @@ def extract_status(data: dict) -> str:
 
 def send_telegram(message: str) -> bool:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
-        print("⚠️  Telegram not configured — skipping")
+        print("Telegram not configured — skipping")
         return False
     payload = json.dumps({
         "chat_id":    TELEGRAM_CHAT,
@@ -150,7 +146,7 @@ def send_telegram(message: str) -> bool:
     conn.close()
     if resp.status == 200:
         return True
-    print(f"⚠️  Telegram error HTTP {resp.status}: {raw[:200]}")
+    print(f"Telegram error HTTP {resp.status}: {raw[:200]}")
     return False
 
 
@@ -164,34 +160,32 @@ def load_state() -> dict:
 def save_state(state: dict):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
-    print(f"💾  State saved → {STATE_FILE}")
+    print(f"State saved -> {STATE_FILE}")
 
 
 def append_history(entry: dict):
     with open(HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
-    print(f"📜  History updated → {HISTORY_FILE}")
+    print(f"History updated -> {HISTORY_FILE}")
 
 
 def build_message(old_status: str, new_status: str, ts: str) -> str:
-    old_emoji = STATUS_EMOJI.get(old_status, "❓")
-    new_emoji = STATUS_EMOJI.get(new_status, "❓")
-
+    emoji = STATUS_EMOJI.get(new_status, "")
     if new_status in PROBLEM_STATUSES:
-        header = f"{new_emoji} <b>{SERVICE_NAME.upper()} — {new_status.upper()}</b>"
+        header = f"{emoji} <b>{SERVICE_NAME.upper()} — {new_status.upper()}</b>"
     else:
-        header = f"{new_emoji} <b>{SERVICE_NAME.upper()} — RECOVERED</b>"
+        header = f"{emoji} <b>{SERVICE_NAME.upper()} — RECOVERED</b>"
 
     return "\n".join([
         header,
-        f"Was: {old_emoji} {old_status.upper()}  →  Now: {new_emoji} {new_status.upper()}",
-        f"🕐 {ts}",
+        f"Was: {old_status.upper()}  ->  Now: {new_status.upper()}",
+        ts,
     ])
 
 
 def main():
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
-        print("❌  Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
+        print("ERROR: Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
         sys.exit(1)
 
     now_ts, _ = local_timestamp()
@@ -200,32 +194,30 @@ def main():
 
     data = fetch_psn_status()
     if data is None:
-        print("⏭️   Skipping state/history update due to fetch failure.")
-        sys.exit(0)   # non-fatal — don't break the workflow
+        print("Skipping state/history update due to fetch failure.")
+        sys.exit(0)
 
     simple_status = extract_status(data)
-    emoji         = STATUS_EMOJI.get(simple_status, "✅")
 
     print(f"\n{'=' * 45}")
     print(f"  {SERVICE_NAME.upper()} STATUS ({REGION})")
     print(f"{'=' * 45}")
-    print(f"\n  {emoji}  {SERVICE_NAME}")
+    print(f"\n  {SERVICE_NAME}")
     print(f"      Status : {simple_status.upper()}")
     print(f"\n{'=' * 45}\n")
 
-    # Load full state — only touch our own key, leave all other services intact
     state      = load_state()
     old_status = state.get(SERVICE_KEY, {}).get("status", "unknown")
 
     if old_status != simple_status:
-        print(f"🔄  Transition: {old_status} → {simple_status}")
+        print(f"Transition: {old_status} -> {simple_status}")
         msg = build_message(old_status, simple_status, now_ts)
         print(f"\n--- Message ---\n{msg}\n---------------")
         ok = send_telegram(msg)
-        print("✅  Sent" if ok else "❌  Failed to send")
+        print("Sent" if ok else "Failed to send")
     else:
-        print(f"➡️   No change: {SERVICE_NAME} — {simple_status.upper()}")
-        print("🔕  No notification sent")
+        print(f"No change: {SERVICE_NAME} — {simple_status.upper()}")
+        print("No notification sent")
 
     state[SERVICE_KEY] = {
         "status":     simple_status,
