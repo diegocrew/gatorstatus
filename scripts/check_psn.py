@@ -89,14 +89,29 @@ def extract_status(data: dict) -> str:
     Walk all countries → services → resources in the Sony status payload.
     Any non-empty status array with statusType containing 'outage' → 'down'.
     Any non-empty status array with statusType containing 'maintenance' → 'maintenance'.
-    All empty → 'up'.
+    All empty (or only stale entries) → 'up'.
+
+    Sony's API keeps historical outage entries in place indefinitely without
+    marking them resolved. We filter out anything older than STALE_DAYS to avoid
+    false positives from stale data that the website itself no longer shows.
     """
+    STALE_DAYS  = 7
+    cutoff      = datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)
     has_outage      = False
     has_maintenance = False
+
+    def is_recent(entry: dict) -> bool:
+        raw = entry.get("startDate", "")
+        try:
+            return datetime.fromisoformat(raw) >= cutoff
+        except (ValueError, AttributeError):
+            return True  # unparseable → assume live (safe default)
 
     def check_statuses(status_list: list):
         nonlocal has_outage, has_maintenance
         for entry in status_list:
+            if not is_recent(entry):
+                continue  # skip stale historical entries
             t = entry.get("statusType", "").lower()
             if "outage" in t:
                 has_outage = True
