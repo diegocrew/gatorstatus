@@ -1,8 +1,15 @@
 """
 PlayStation Network Status Monitor
-Fetches status from status.playstation.com (Atlassian Statuspage).
-Uses the top-level status indicator — no API key required.
+Fetches status from status.playstation.com/data/statuses/region/SCEE.json
+Sony's own format (NOT Atlassian Statuspage).
+- Empty status arrays across all services = operational (up)
+- Any entry with statusType "Outage" = down
+- Any entry with statusType "Maintenance" = maintenance (if no outage)
+
 Only modifies the 'psn' key in state.json; all other service keys are preserved.
+HTTP errors are non-fatal: workflow continues, nothing written to state/history.
+
+Change REGION below for a different zone (SCEA=Americas, SCEE=Europe, SCEJ=Japan).
 
 Usage:
     python scripts/check_psn.py
@@ -15,8 +22,9 @@ import http.client
 from datetime import datetime, timezone, timedelta
 import calendar
 
+REGION         = "SCEE"
 HOST           = "status.playstation.com"
-PATH           = "/api/v2/summary.json"
+PATH           = f"/data/statuses/region/{REGION}.json"
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT  = os.environ.get("TELEGRAM_CHAT_ID", "")
 STATE_FILE     = "state.json"
@@ -24,28 +32,18 @@ HISTORY_FILE   = "history.ndjson"
 SERVICE_KEY    = "psn"
 SERVICE_NAME   = "PlayStation Network"
 
-# Atlassian top-level indicator → simplified status used throughout the project
-INDICATOR_MAP = {
-    "none":        "up",
-    "minor":       "warn",
-    "major":       "down",
-    "critical":    "down",
-    "maintenance": "maintenance",   # synthetic — set when a maintenance is in_progress
-}
-
-INDICATOR_EMOJI = {
-    "none":        "✅",
-    "minor":       "⚠️",
-    "major":       "🔴",
-    "critical":    "🔴",
+STATUS_EMOJI = {
+    "up":          "✅",
+    "warn":        "⚠️",
+    "down":        "🔴",
     "maintenance": "🔧",
+    "unknown":     "❓",
 }
 
 PROBLEM_STATUSES = {"warn", "down", "maintenance"}
 
 
 def local_timestamp() -> tuple[str, str]:
-    """Return (formatted_timestamp, tz_label) in CET or CEST."""
     now_utc = datetime.now(timezone.utc)
     year = now_utc.year
 
@@ -66,17 +64,57 @@ def local_timestamp() -> tuple[str, str]:
     return f"{ts} {label}", label
 
 
-def fetch_summary() -> dict:
-    conn = http.client.HTTPSConnection(HOST, timeout=15)
-    conn.request("GET", PATH, headers={"Accept": "application/json",
-                                        "User-Agent": "gatorstatus-monitor/1.0"})
-    resp = conn.getresponse()
-    raw  = resp.read().decode()
-    conn.close()
-    if resp.status != 200:
-        print(f"❌  {SERVICE_NAME} API HTTP {resp.status}")
-        sys.exit(1)
-    return json.loads(raw)
+def fetch_psn_status() -> dict | None:
+    """Return parsed JSON or None on any network/HTTP error (non-fatal)."""
+    try:
+        conn = http.client.HTTPSConnection(HOST, timeout=15)
+        conn.request("GET", PATH, headers={
+            "Accept":     "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; gatorstatus/1.0)"
+        })
+        resp = conn.getresponse()
+        raw  = resp.read().decode()
+        conn.close()
+        if resp.status != 200:
+            print(f"⚠️   {SERVICE_NAME} API HTTP {resp.status} — skipping this run")
+            return None
+        return json.loads(raw)
+    except Exception as e:
+        print(f"⚠️   {SERVICE_NAME} fetch error: {e} — skipping this run")
+        return None
+
+
+def extract_status(data: dict) -> str:
+    """
+    Walk all countries → services → resources in the Sony status payload.
+    Any non-empty status array with statusType containing 'outage' → 'down'.
+    Any non-empty status array with statusType containing 'maintenance' → 'maintenance'.
+    All empty → 'up'.
+    """
+    has_outage      = False
+    has_maintenance = False
+
+    def check_statuses(status_list: list):
+        nonlocal has_outage, has_maintenance
+        for entry in status_list:
+            t = entry.get("statusType", "").lower()
+            if "outage" in t:
+                has_outage = True
+            elif "maintenance" in t:
+                has_maintenance = True
+
+    for country in data.get("countries", []):
+        check_statuses(country.get("status", []))
+        for service in country.get("services", []):
+            check_statuses(service.get("status", []))
+            for resource in service.get("resources", []):
+                check_statuses(resource.get("status", []))
+
+    if has_outage:
+        return "down"
+    if has_maintenance:
+        return "maintenance"
+    return "up"
 
 
 def send_telegram(message: str) -> bool:
@@ -120,20 +158,18 @@ def append_history(entry: dict):
     print(f"📜  History updated → {HISTORY_FILE}")
 
 
-def build_message(old_ind: str, new_ind: str, ts: str) -> str:
-    old_simple = INDICATOR_MAP.get(old_ind, old_ind)
-    new_simple = INDICATOR_MAP.get(new_ind, new_ind)
-    old_emoji  = INDICATOR_EMOJI.get(old_ind, "❓")
-    new_emoji  = INDICATOR_EMOJI.get(new_ind, "❓")
+def build_message(old_status: str, new_status: str, ts: str) -> str:
+    old_emoji = STATUS_EMOJI.get(old_status, "❓")
+    new_emoji = STATUS_EMOJI.get(new_status, "❓")
 
-    if new_simple in PROBLEM_STATUSES:
-        header = f"{new_emoji} <b>{SERVICE_NAME.upper()} — {new_simple.upper()}</b>"
+    if new_status in PROBLEM_STATUSES:
+        header = f"{new_emoji} <b>{SERVICE_NAME.upper()} — {new_status.upper()}</b>"
     else:
         header = f"{new_emoji} <b>{SERVICE_NAME.upper()} — RECOVERED</b>"
 
     return "\n".join([
         header,
-        f"Was: {old_emoji} {old_simple.upper()}  →  Now: {new_emoji} {new_simple.upper()}",
+        f"Was: {old_emoji} {old_status.upper()}  →  Now: {new_emoji} {new_status.upper()}",
         f"🕐 {ts}",
     ])
 
@@ -145,34 +181,30 @@ def main():
 
     now_ts, _ = local_timestamp()
     print(f"[{now_ts}]\n")
-    print(f"Fetching {SERVICE_NAME} status...")
+    print(f"Fetching {SERVICE_NAME} status ({REGION} region)...")
 
-    data      = fetch_summary()
-    indicator = data.get("status", {}).get("indicator", "none")
+    data = fetch_psn_status()
+    if data is None:
+        print("⏭️   Skipping state/history update due to fetch failure.")
+        sys.exit(0)   # non-fatal — don't break the workflow
 
-    # Promote to maintenance if a scheduled maintenance window is currently active
-    maintenances = data.get("scheduled_maintenances", [])
-    if indicator == "none" and any(m.get("status") == "in_progress" for m in maintenances):
-        indicator = "maintenance"
-
-    simple_status = INDICATOR_MAP.get(indicator, "unknown")
-    emoji         = INDICATOR_EMOJI.get(indicator, "✅")
+    simple_status = extract_status(data)
+    emoji         = STATUS_EMOJI.get(simple_status, "✅")
 
     print(f"\n{'=' * 45}")
-    print(f"  {SERVICE_NAME.upper()} STATUS")
+    print(f"  {SERVICE_NAME.upper()} STATUS ({REGION})")
     print(f"{'=' * 45}")
     print(f"\n  {emoji}  {SERVICE_NAME}")
-    print(f"      Status    : {simple_status.upper()}")
-    print(f"      Indicator : {indicator}")
+    print(f"      Status : {simple_status.upper()}")
     print(f"\n{'=' * 45}\n")
 
     # Load full state — only touch our own key, leave all other services intact
-    state     = load_state()
-    old_ind   = state.get(SERVICE_KEY, {}).get("raw_status", "unknown")
+    state      = load_state()
+    old_status = state.get(SERVICE_KEY, {}).get("status", "unknown")
 
-    if old_ind != indicator:
-        print(f"🔄  Transition: {old_ind} → {indicator}")
-        msg = build_message(old_ind, indicator, now_ts)
+    if old_status != simple_status:
+        print(f"🔄  Transition: {old_status} → {simple_status}")
+        msg = build_message(old_status, simple_status, now_ts)
         print(f"\n--- Message ---\n{msg}\n---------------")
         ok = send_telegram(msg)
         print("✅  Sent" if ok else "❌  Failed to send")
@@ -182,7 +214,7 @@ def main():
 
     state[SERVICE_KEY] = {
         "status":     simple_status,
-        "raw_status": indicator,
+        "raw_status": simple_status,
         "since":      now_ts,
     }
     save_state(state)
