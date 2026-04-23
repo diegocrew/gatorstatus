@@ -14,9 +14,6 @@
       --border:  #334155;
       --text:    #f1f5f9;
       --muted:   #64748b;
-      --c-up:    #22c55e;
-      --c-part:  #eab308;
-      --c-down:  #ef4444;
     }
 
     body {
@@ -28,7 +25,6 @@
       margin: 0 auto;
     }
 
-    /* ── header ─────────────────────────────────────────── */
     header {
       display: flex;
       align-items: center;
@@ -54,7 +50,6 @@
 
     .updated { color: var(--muted); font-size: 0.74rem; }
 
-    /* ── cards ───────────────────────────────────────────── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -71,45 +66,8 @@
       margin-bottom: 1rem;
     }
 
-    /* ── summary heatmap ─────────────────────────────────── */
-    .heatmap { display: flex; flex-direction: column; gap: 6px; }
-    .heatmap-row { display: flex; align-items: center; gap: 10px; }
-    .heatmap-label {
-      width: 72px;
-      font-size: 0.8rem;
-      font-weight: 500;
-      text-align: right;
-      flex-shrink: 0;
-    }
-    .heatmap-cells {
-      display: flex;
-      flex: 1;
-      gap: 2px;
-      height: 22px;
-      overflow: hidden;
-    }
-    .heatmap-cell {
-      flex: 1;
-      border-radius: 2px;
-      min-width: 3px;
-      cursor: default;
-    }
-    .cell-up                        { background: var(--c-up); }
-    .cell-warn, .cell-maintenance   { background: var(--c-part); }
-    .cell-down, .cell-unknown       { background: var(--c-down); }
-    .cell-nodata                    { background: rgba(239,68,68,.18); }
+    .chart-wrap-lg { position: relative; height: 200px; }
 
-    .legend {
-      display: flex;
-      gap: 1.25rem;
-      margin-top: 0.85rem;
-      padding-left: 82px;
-      flex-wrap: wrap;
-    }
-    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.71rem; color: var(--muted); }
-    .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-
-    /* ── service cards ───────────────────────────────────── */
     .svc-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -139,15 +97,14 @@
       padding: 0.2rem 0.6rem;
       border-radius: 999px;
     }
-    .badge-up                         { background: rgba(34,197,94,.15);  color: var(--c-up);   }
-    .badge-warn, .badge-maintenance   { background: rgba(234,179,8,.15);  color: var(--c-part); }
-    .badge-down, .badge-unknown       { background: rgba(239,68,68,.15);  color: var(--c-down); }
+    .badge-up                       { background: rgba(34,197,94,.15);  color: #22c55e; }
+    .badge-warn, .badge-maintenance { background: rgba(245,158,11,.15); color: #f59e0b; }
+    .badge-down, .badge-unknown     { background: rgba(239,68,68,.15);  color: #ef4444; }
 
-    .chart-wrap { position: relative; height: 68px; }
+    .chart-wrap { position: relative; height: 140px; }
 
-    /* ── misc ────────────────────────────────────────────── */
     .loading { text-align: center; padding: 4rem; color: var(--muted); }
-    .err     { text-align: center; padding: 2rem; color: var(--c-down); }
+    .err     { text-align: center; padding: 2rem; color: #ef4444; }
   </style>
 </head>
 <body>
@@ -156,22 +113,25 @@
 
 <script>
 const SERVICES = [
-  { key: 'ea',         name: 'EA'         },
-  { key: 'steam',      name: 'Steam'      },
-  { key: 'ubisoft',    name: 'Ubisoft'    },
-  { key: 'epic_store', name: 'Epic Store' }
+  { key: 'ea',         name: 'EA',         color: '#60a5fa' },
+  { key: 'steam',      name: 'Steam',      color: '#c084fc' },
+  { key: 'ubisoft',    name: 'Ubisoft',    color: '#fb923c' },
+  { key: 'epic_store', name: 'Epic Store', color: '#34d399' }
 ];
 
-const CLR = {
-  up:          '#22c55e',
-  warn:        '#eab308',
-  maintenance: '#eab308',
-  down:        '#ef4444',
-  unknown:     '#ef4444',
-  nodata:      'rgba(239,68,68,.18)'
-};
+// Status → numeric y value
+function sy(status) {
+  if (status === 'up') return 2;
+  if (status === 'warn' || status === 'maintenance') return 1;
+  return 0;
+}
 
-const PRIORITY = ['down', 'unknown', 'maintenance', 'warn', 'up'];
+// y value → segment/dot color
+function yCol(y) {
+  if (y === 2) return '#22c55e'; // green  – operational
+  if (y === 1) return '#f59e0b'; // orange – partial / maintenance
+  return '#ef4444';              // red    – down
+}
 
 function parseTs(ts) {
   const m = ts.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) (CET|CEST)/);
@@ -179,47 +139,53 @@ function parseTs(ts) {
   return new Date(`${m[1]}T${m[2]}${m[3] === 'CEST' ? '+02:00' : '+01:00'}`);
 }
 
-function worst(statuses) {
-  for (const s of PRIORITY) if (statuses.includes(s)) return s;
-  return null;
-}
-
-// Returns array of {start, end} Date pairs, oldest→newest, ending at ~now
-function getBuckets(range) {
+function winStart(range) {
   const now = Date.now();
-  const [step, count] =
-    range === 'day'  ? [3600e3,      24] :
-    range === 'week' ? [6 * 3600e3,  28] :
-                       [86400e3,     30];
-  return Array.from({ length: count }, (_, i) => ({
-    start: new Date(now - (count - i) * step),
-    end:   new Date(now - (count - i - 1) * step)
-  }));
+  return range === 'day'  ? now - 864e5   // 24 h
+       : range === 'week' ? now - 6048e5  // 7 d
+                          : now - 2592e6; // 30 d
 }
 
-function bucketLabel(bucket, range) {
-  const d = bucket.start;
+function fmtTick(ms, range) {
+  const d = new Date(ms);
   if (range === 'day')
-    return `${String(d.getHours()).padStart(2,'0')}:00`;
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   if (range === 'week') {
-    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    return `${days[d.getDay()]} ${String(d.getHours()).padStart(2,'0')}h`;
+    const day = ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
+    return `${day} ${String(d.getHours()).padStart(2,'0')}h`;
   }
   return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
 }
 
-function assignToBuckets(records, buckets) {
-  const result = buckets.map(() => []);
-  for (const r of records) {
-    const t = parseTs(r.ts).getTime();
-    for (let i = 0; i < buckets.length; i++) {
-      if (t >= buckets[i].start.getTime() && t < buckets[i].end.getTime()) {
-        result[i].push(r.status);
-        break;
-      }
-    }
+// Shared y-axis config
+const Y_SCALE = {
+  min: -0.35,
+  max: 2.35,
+  border: { display: false },
+  grid: { color: 'rgba(51,65,85,0.6)' },
+  ticks: {
+    color: '#475569',
+    font: { size: 9 },
+    stepSize: 1,
+    callback: v => v === 0 ? 'Down' : v === 1 ? 'Partial' : v === 2 ? 'Up' : ''
   }
-  return result;
+};
+
+function xScale(range) {
+  return {
+    type: 'linear',
+    min: winStart(range),
+    max: Date.now(),
+    border: { display: false },
+    grid: { color: 'rgba(30,41,59,0.8)' },
+    ticks: {
+      color: '#475569',
+      font: { size: 9 },
+      maxTicksLimit: 8,
+      autoSkip: true,
+      callback: v => fmtTick(v, range)
+    }
+  };
 }
 
 let allRecords = [];
@@ -229,68 +195,97 @@ const charts = {};
 async function loadData() {
   const res = await fetch('history.ndjson');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  allRecords = text.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+  allRecords = (await res.text()).trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 }
 
 function currentStatus(key) {
-  const svcRecs = allRecords.filter(r => r.service === key);
-  return svcRecs.length ? svcRecs[svcRecs.length - 1].status : 'unknown';
+  const r = allRecords.filter(x => x.service === key);
+  return r.length ? r[r.length - 1].status : 'unknown';
 }
 
 function badgeLabel(s) {
   return { up:'Operational', warn:'Degraded', maintenance:'Maintenance', down:'Down' }[s] ?? 'Unknown';
 }
 
-// ── Summary heatmap ──────────────────────────────────────────────────────────
-function renderSummary(buckets, range) {
-  const el = document.getElementById('summary');
-  el.innerHTML = '';
-  for (const svc of SERVICES) {
-    const bkts = assignToBuckets(allRecords.filter(r => r.service === svc.key), buckets);
-    const row = document.createElement('div');
-    row.className = 'heatmap-row';
+// ── Summary: one line per service, fixed service color ──────────────────────
+function renderSummaryChart(range) {
+  const ws = winStart(range);
+  const canvas = document.getElementById('summary-chart');
+  if (charts.summary) charts.summary.destroy();
 
-    const lbl = document.createElement('div');
-    lbl.className = 'heatmap-label';
-    lbl.textContent = svc.name;
-    row.appendChild(lbl);
+  const datasets = SERVICES.map(svc => {
+    const data = allRecords
+      .filter(r => r.service === svc.key && parseTs(r.ts).getTime() >= ws)
+      .map(r => ({ x: parseTs(r.ts).getTime(), y: sy(r.status) }));
+    return {
+      label: svc.name,
+      data,
+      borderColor: svc.color,
+      pointBackgroundColor: svc.color,
+      pointBorderColor: svc.color,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      borderWidth: 2,
+      tension: 0,
+      parsing: false
+    };
+  });
 
-    const cells = document.createElement('div');
-    cells.className = 'heatmap-cells';
-    bkts.forEach((statuses, i) => {
-      const s = statuses.length ? worst(statuses) : 'nodata';
-      const cell = document.createElement('div');
-      cell.className = `heatmap-cell cell-${s}`;
-      cell.title = `${bucketLabel(buckets[i], range)}: ${s === 'nodata' ? 'no data' : s}`;
-      cells.appendChild(cell);
-    });
-    row.appendChild(cells);
-    el.appendChild(row);
-  }
+  charts.summary = new Chart(canvas, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: '#94a3b8', boxWidth: 16, boxHeight: 2, padding: 14, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            title: items => fmtTick(items[0].parsed.x, range),
+            label: item => ` ${item.dataset.label}: ${['Down','Partial','Up'][item.parsed.y] ?? '?'}`
+          }
+        }
+      },
+      scales: { x: xScale(range), y: Y_SCALE }
+    }
+  });
 }
 
-// ── Individual service chart ─────────────────────────────────────────────────
-function renderChart(svc, buckets, range) {
-  const bkts = assignToBuckets(allRecords.filter(r => r.service === svc.key), buckets);
-  const labels   = buckets.map(b => bucketLabel(b, range));
-  const bgColors = bkts.map(s => CLR[s.length ? worst(s) : 'nodata']);
-  const tipText  = bkts.map(s => s.length ? worst(s) : 'no data');
+// ── Individual service: dots + straight lines, segment color = destination ──
+function renderServiceChart(svc, range) {
+  const ws = winStart(range);
+  const svcRecs = allRecords
+    .filter(r => r.service === svc.key && parseTs(r.ts).getTime() >= ws);
+  const data = svcRecs.map(r => ({ x: parseTs(r.ts).getTime(), y: sy(r.status) }));
 
   const canvas = document.getElementById(`c-${svc.key}`);
   if (charts[svc.key]) charts[svc.key].destroy();
 
   charts[svc.key] = new Chart(canvas, {
-    type: 'bar',
+    type: 'line',
     data: {
-      labels,
       datasets: [{
-        data: labels.map(() => 1),   // uniform height — color carries the meaning
-        backgroundColor: bgColors,
-        borderWidth: 0,
-        borderRadius: 2,
-        barPercentage: 0.92,
-        categoryPercentage: 1.0
+        data,
+        parsing: false,
+        borderWidth: 2.5,
+        borderColor: '#64748b',          // fallback; segment overrides per-segment
+        pointBackgroundColor: data.map(d => yCol(d.y)),
+        pointBorderColor:     data.map(d => yCol(d.y)),
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        tension: 0,
+        // Color each segment by where it's *going*: destination y value
+        segment: {
+          borderColor: ctx => {
+            const pt = data[ctx.p1DataIndex];
+            return pt ? yCol(pt.y) : '#64748b';
+          }
+        }
       }]
     },
     options: {
@@ -301,41 +296,21 @@ function renderChart(svc, buckets, range) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: (items) => labels[items[0].dataIndex],
-            label: (item) => {
-              const s = tipText[item.dataIndex];
-              return '  ' + s.charAt(0).toUpperCase() + s.slice(1);
-            }
-          },
-          displayColors: true,
-          boxWidth: 9,
-          boxHeight: 9
+            title: items => fmtTick(items[0].parsed.x, range),
+            label: item => ' ' + (['Down','Partial','Up'][item.parsed.y] ?? '?')
+          }
         }
       },
-      scales: {
-        x: {
-          grid: { display: false },
-          border: { display: false },
-          ticks: {
-            color: '#475569',
-            font: { size: 9 },
-            maxRotation: 0,
-            autoSkip: true,
-            maxTicksLimit: range === 'day' ? 12 : range === 'week' ? 8 : 10
-          }
-        },
-        y: { display: false, min: 0, max: 1 }
-      }
+      scales: { x: xScale(range), y: Y_SCALE }
     }
   });
 }
 
 // ── Full render pass ─────────────────────────────────────────────────────────
 function render(range) {
-  const buckets = getBuckets(range);
-  renderSummary(buckets, range);
+  renderSummaryChart(range);
   for (const svc of SERVICES) {
-    renderChart(svc, buckets, range);
+    renderServiceChart(svc, range);
     const badge = document.getElementById(`badge-${svc.key}`);
     if (!badge) continue;
     const s = currentStatus(svc.key);
@@ -364,21 +339,7 @@ function buildUI() {
 
     <div class="card">
       <div class="card-title">All Services</div>
-      <div id="summary" class="heatmap"></div>
-      <div class="legend">
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:#22c55e"></div>Operational
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:#eab308"></div>Degraded / Maintenance
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:#ef4444"></div>Down
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch" style="background:rgba(239,68,68,.18)"></div>No data
-        </div>
-      </div>
+      <div class="chart-wrap-lg"><canvas id="summary-chart"></canvas></div>
     </div>
 
     <div class="svc-grid">
