@@ -66,6 +66,41 @@
       margin-bottom: 1rem;
     }
 
+    /* ── Current status overview ── */
+    .overall-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding-bottom: 0.9rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-up                         { background: #22c55e; box-shadow: 0 0 8px #22c55e55; }
+    .dot-warn, .dot-maintenance     { background: #f59e0b; }
+    .dot-down, .dot-unknown         { background: #ef4444; }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.45rem 0;
+      border-top: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+    .status-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .status-since { color: var(--muted); font-size: 0.74rem; }
+
+    /* ── Charts ── */
     .chart-wrap-lg { position: relative; height: 200px; }
 
     .svc-grid {
@@ -191,9 +226,10 @@ function xScale(range) {
   };
 }
 
-let allRecords = [];
+let allRecords  = [];
+let stateData   = {};
 let activeRange = 'day';
-const charts = {};
+const charts    = {};
 
 async function loadData() {
   const res = await fetch('history.ndjson');
@@ -201,13 +237,56 @@ async function loadData() {
   allRecords = (await res.text()).trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 }
 
+async function loadState() {
+  try {
+    const res = await fetch('state.json');
+    if (res.ok) stateData = await res.json();
+  } catch (_) { /* non-fatal — overview falls back to history */ }
+}
+
 function currentStatus(key) {
+  if (stateData[key]) return stateData[key].status;
   const r = allRecords.filter(x => x.service === key);
   return r.length ? r[r.length - 1].status : 'unknown';
 }
 
 function badgeLabel(s) {
   return { up:'Operational', warn:'Degraded', maintenance:'Maintenance', down:'Down' }[s] ?? 'Unknown';
+}
+
+// ── Current status overview ──────────────────────────────────────────────────
+function overallStatus() {
+  const statuses = SERVICES.map(s => currentStatus(s.key));
+  if (statuses.some(s => s === 'down'))                        return 'down';
+  if (statuses.some(s => s === 'warn' || s === 'maintenance')) return 'warn';
+  if (statuses.every(s => s === 'unknown'))                    return 'unknown';
+  return 'up';
+}
+
+function renderOverview() {
+  const overall = overallStatus();
+  const dot  = document.getElementById('overall-dot');
+  const text = document.getElementById('overall-text');
+  if (dot)  dot.className = `dot dot-${overall}`;
+  if (text) text.textContent =
+    overall === 'up'   ? 'All Systems Operational' :
+    overall === 'down' ? 'Outage Detected'          :
+    overall === 'warn' ? 'Partial Issues'           : 'Status Unknown';
+
+  const rowsEl = document.getElementById('status-rows');
+  if (!rowsEl) return;
+  rowsEl.innerHTML = SERVICES.map(svc => {
+    const s     = currentStatus(svc.key);
+    const since = stateData[svc.key]?.since ?? '';
+    return `
+      <div class="status-row">
+        <span class="svc-name">${svc.name}</span>
+        <span class="status-right">
+          ${since ? `<span class="status-since">since ${since}</span>` : ''}
+          <span class="badge badge-${s}">${badgeLabel(s)}</span>
+        </span>
+      </div>`;
+  }).join('');
 }
 
 // ── Summary: one line per service, fixed service color ──────────────────────
@@ -319,6 +398,7 @@ function renderServiceChart(svc, range) {
 
 // ── Full render pass ─────────────────────────────────────────────────────────
 function render(range) {
+  renderOverview();
   renderSummaryChart(range);
   for (const svc of SERVICES) {
     renderServiceChart(svc, range);
@@ -339,7 +419,7 @@ function buildUI() {
 
   document.getElementById('app').innerHTML = `
     <header>
-      <div class="logo">GatorStatus</div>
+      <div class="logo">StatusPage</div>
       <div class="filters">
         <button class="filter-btn" data-r="day">Day</button>
         <button class="filter-btn" data-r="week">Week</button>
@@ -347,6 +427,15 @@ function buildUI() {
       </div>
       <div class="updated">Updated: ${updated}</div>
     </header>
+
+    <div class="card">
+      <div class="card-title">Current Status</div>
+      <div class="overall-banner">
+        <span class="dot" id="overall-dot"></span>
+        <span id="overall-text"></span>
+      </div>
+      <div id="status-rows"></div>
+    </div>
 
     <div class="card">
       <div class="card-title">All Services</div>
@@ -381,7 +470,7 @@ function buildUI() {
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (async () => {
   try {
-    await loadData();
+    await Promise.all([loadData(), loadState()]);
     buildUI();
     render(activeRange);
   } catch (e) {
