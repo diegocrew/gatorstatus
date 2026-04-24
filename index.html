@@ -89,16 +89,11 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.45rem 0;
+      gap: 0.5rem;
+      padding: 0.5rem 0;
       border-top: 1px solid var(--border);
-      font-size: 0.875rem;
     }
-    .status-right {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .status-since { color: var(--muted); font-size: 0.74rem; }
+    .status-since { color: var(--muted); font-size: 0.7rem; margin-top: 0.15rem; }
 
     /* ── Charts ── */
     .chart-wrap-lg { position: relative; height: 200px; }
@@ -138,6 +133,22 @@
     .badge-down, .badge-unknown     { background: rgba(239,68,68,.15);  color: #ef4444; }
 
     .chart-wrap { position: relative; height: 140px; }
+
+    /* ── Two-column layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 260px;
+      gap: 1.25rem;
+      align-items: start;
+    }
+    .sidebar {
+      position: sticky;
+      top: 1.5rem;
+    }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+    }
 
     .loading { text-align: center; padding: 4rem; color: var(--muted); }
     .err     { text-align: center; padding: 2rem; color: #ef4444; }
@@ -280,11 +291,11 @@ function renderOverview() {
     const since = stateData[svc.key]?.since ?? '';
     return `
       <div class="status-row">
-        <span class="svc-name">${svc.name}</span>
-        <span class="status-right">
-          ${since ? `<span class="status-since">since ${since}</span>` : ''}
-          <span class="badge badge-${s}">${badgeLabel(s)}</span>
-        </span>
+        <div>
+          <div class="svc-name">${svc.name}</div>
+          ${since ? `<div class="status-since">${since}</div>` : ''}
+        </div>
+        <span class="badge badge-${s}">${badgeLabel(s)}</span>
       </div>`;
   }).join('');
 }
@@ -428,30 +439,36 @@ function buildUI() {
       <div class="updated">Updated: ${updated}</div>
     </header>
 
-    <div class="card">
-      <div class="card-title">Current Status</div>
-      <div class="overall-banner">
-        <span class="dot" id="overall-dot"></span>
-        <span id="overall-text"></span>
-      </div>
-      <div id="status-rows"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">All Services</div>
-      <div class="chart-wrap-lg"><canvas id="summary-chart"></canvas></div>
-    </div>
-
-    <div class="svc-grid">
-      ${SERVICES.map(svc => `
-        <div class="svc-card">
-          <div class="svc-head">
-            <span class="svc-name">${svc.name}</span>
-            <span id="badge-${svc.key}" class="badge">—</span>
-          </div>
-          <div class="chart-wrap"><canvas id="c-${svc.key}"></canvas></div>
+    <div class="layout">
+      <div class="main-col">
+        <div class="card">
+          <div class="card-title">All Services</div>
+          <div class="chart-wrap-lg"><canvas id="summary-chart"></canvas></div>
         </div>
-      `).join('')}
+
+        <div class="svc-grid">
+          ${SERVICES.map(svc => `
+            <div class="svc-card">
+              <div class="svc-head">
+                <span class="svc-name">${svc.name}</span>
+                <span id="badge-${svc.key}" class="badge">—</span>
+              </div>
+              <div class="chart-wrap"><canvas id="c-${svc.key}"></canvas></div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="card">
+          <div class="card-title">Current Status</div>
+          <div class="overall-banner">
+            <span class="dot" id="overall-dot"></span>
+            <span id="overall-text"></span>
+          </div>
+          <div id="status-rows"></div>
+        </div>
+      </div>
     </div>
   `;
 
