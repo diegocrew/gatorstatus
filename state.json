@@ -1,29 +1,29 @@
 {
   "ea": {
     "status": "up",
-    "since": "2026-05-05 21:53:18 CEST"
+    "since": "2026-05-05 22:59:35 CEST"
   },
   "steam": {
     "status": "up",
-    "since": "2026-05-05 21:53:18 CEST"
+    "since": "2026-05-05 22:59:35 CEST"
   },
   "ubisoft": {
     "status": "up",
-    "since": "2026-05-05 21:53:18 CEST"
+    "since": "2026-05-05 22:59:35 CEST"
   },
   "epic_store": {
     "status": "up",
     "raw_status": "operational",
-    "since": "2026-05-05 21:53:19 CEST"
+    "since": "2026-05-05 22:59:36 CEST"
   },
   "psn": {
     "status": "up",
     "raw_status": "up",
-    "since": "2026-05-05 21:53:19 CEST"
+    "since": "2026-05-05 22:59:36 CEST"
   },
   "discord": {
     "status": "up",
     "raw_status": "none",
-    "since": "2026-05-05 21:53:19 CEST"
+    "since": "2026-05-05 22:59:36 CEST"
   }
 }
