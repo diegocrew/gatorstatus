@@ -1450,3 +1450,9 @@
 {"ts": "2026-05-07 06:53:54 CEST", "service": "epic_store", "status": "up"}
 {"ts": "2026-05-07 06:53:54 CEST", "service": "psn", "status": "up"}
 {"ts": "2026-05-07 06:53:55 CEST", "service": "discord", "status": "up"}
+{"ts": "2026-05-07 09:41:12 CEST", "service": "ea", "status": "up"}
+{"ts": "2026-05-07 09:41:12 CEST", "service": "steam", "status": "up"}
+{"ts": "2026-05-07 09:41:12 CEST", "service": "ubisoft", "status": "up"}
+{"ts": "2026-05-07 09:41:12 CEST", "service": "epic_store", "status": "up"}
+{"ts": "2026-05-07 09:41:12 CEST", "service": "psn", "status": "up"}
+{"ts": "2026-05-07 09:41:13 CEST", "service": "discord", "status": "up"}
