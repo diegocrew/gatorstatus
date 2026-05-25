@@ -69,7 +69,7 @@ def extract_status(data: dict) -> str:
     Sony keeps historical outage entries indefinitely without marking them resolved,
     so only entries within STALE_DAYS are considered to avoid false positives.
     """
-    STALE_DAYS      = 7
+    STALE_DAYS      = 1
     cutoff          = datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)
     has_outage      = False
     has_maintenance = False
