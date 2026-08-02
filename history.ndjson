@@ -6892,3 +6892,9 @@
 {"ts": "2026-08-02 08:22:54 CEST", "service": "epic_store", "status": "up"}
 {"ts": "2026-08-02 08:22:55 CEST", "service": "psn", "status": "up"}
 {"ts": "2026-08-02 08:22:55 CEST", "service": "discord", "status": "up"}
+{"ts": "2026-08-02 10:42:34 CEST", "service": "ea", "status": "warn"}
+{"ts": "2026-08-02 10:42:34 CEST", "service": "steam", "status": "up"}
+{"ts": "2026-08-02 10:42:34 CEST", "service": "ubisoft", "status": "up"}
+{"ts": "2026-08-02 10:42:35 CEST", "service": "epic_store", "status": "up"}
+{"ts": "2026-08-02 10:42:36 CEST", "service": "psn", "status": "up"}
+{"ts": "2026-08-02 10:42:36 CEST", "service": "discord", "status": "up"}
