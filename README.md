@@ -151,6 +151,23 @@ Repo → **Settings → Actions → General → Workflow permissions → Read an
 
 **Actions → Service Status Monitor → Run workflow** — triggers immediately without waiting for the schedule. Useful for testing after setup.
 
+### Testing action-devops
+
+The separate [DevOps Action Test workflow](.github/workflows/devops-test.yml)
+tests [diegocrew/action-devops](https://github.com/diegocrew/action-devops)
+using a pinned snapshot of its `main` branch. Run it from
+**Actions → DevOps Action Test → Run workflow**.
+
+It runs linting, Python syntax compilation, Trivy, Checkov, and dependency-version
+checks in `audit` mode. Review the run's job summary and logs for findings;
+an audit run can succeed even when checks report failures. Python compilation
+checks syntax only, not runtime behavior or unit tests.
+
+This workflow is manual-only, uses read-only repository permissions, and receives
+no monitoring secrets. It does not execute the monitoring scripts, send Telegram
+notifications, or commit state changes. Update the pinned SHA to test newer
+changes to the action.
+
 ---
 
 ## Example Telegram Notifications

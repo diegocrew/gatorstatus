@@ -1,0 +1,23 @@
+name: DevOps Action Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  devops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Test action-devops
+        uses: diegocrew/action-devops@4a3c55fe7c4975f0e3ca866d85369bfe069b6508 # main snapshot
+        with:
+          mode: audit
+          lint: "true"
+          python: "true"
+          python-command: python -m compileall -q scripts
+          trivy: "true"
+          iac-security: "true"
+          versions: "true"
