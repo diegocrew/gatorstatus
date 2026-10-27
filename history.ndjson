@@ -15454,3 +15454,9 @@
 {"ts": "2026-10-27 18:25:33 CET", "service": "epic_store", "status": "up"}
 {"ts": "2026-10-27 18:25:33 CET", "service": "psn", "status": "up"}
 {"ts": "2026-10-27 18:25:33 CET", "service": "discord", "status": "up"}
+{"ts": "2026-10-27 18:34:44 CET", "service": "ea", "status": "up"}
+{"ts": "2026-10-27 18:34:44 CET", "service": "steam", "status": "up"}
+{"ts": "2026-10-27 18:34:44 CET", "service": "ubisoft", "status": "up"}
+{"ts": "2026-10-27 18:34:45 CET", "service": "epic_store", "status": "up"}
+{"ts": "2026-10-27 18:34:45 CET", "service": "psn", "status": "up"}
+{"ts": "2026-10-27 18:34:45 CET", "service": "discord", "status": "up"}
