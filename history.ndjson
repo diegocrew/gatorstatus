@@ -20002,3 +20002,9 @@
 {"ts": "2026-11-02 11:15:50 CET", "service": "epic_store", "status": "warn"}
 {"ts": "2026-11-02 11:15:50 CET", "service": "psn", "status": "down"}
 {"ts": "2026-11-02 11:15:50 CET", "service": "discord", "status": "up"}
+{"ts": "2026-11-02 11:23:20 CET", "service": "ea", "status": "warn"}
+{"ts": "2026-11-02 11:23:20 CET", "service": "steam", "status": "up"}
+{"ts": "2026-11-02 11:23:20 CET", "service": "ubisoft", "status": "up"}
+{"ts": "2026-11-02 11:23:20 CET", "service": "epic_store", "status": "warn"}
+{"ts": "2026-11-02 11:23:20 CET", "service": "psn", "status": "down"}
+{"ts": "2026-11-02 11:23:20 CET", "service": "discord", "status": "up"}
