@@ -22966,3 +22966,9 @@
 {"ts": "2026-11-06 02:06:36 CET", "service": "epic_store", "status": "up"}
 {"ts": "2026-11-06 02:06:36 CET", "service": "psn", "status": "up"}
 {"ts": "2026-11-06 02:06:36 CET", "service": "discord", "status": "up"}
+{"ts": "2026-11-06 02:16:26 CET", "service": "ea", "status": "up"}
+{"ts": "2026-11-06 02:16:26 CET", "service": "steam", "status": "up"}
+{"ts": "2026-11-06 02:16:26 CET", "service": "ubisoft", "status": "up"}
+{"ts": "2026-11-06 02:16:26 CET", "service": "epic_store", "status": "up"}
+{"ts": "2026-11-06 02:16:27 CET", "service": "psn", "status": "up"}
+{"ts": "2026-11-06 02:16:27 CET", "service": "discord", "status": "up"}
