@@ -31370,3 +31370,9 @@
 {"ts": "2026-11-16 08:05:00 CET", "service": "epic_store", "status": "up"}
 {"ts": "2026-11-16 08:05:00 CET", "service": "psn", "status": "up"}
 {"ts": "2026-11-16 08:05:00 CET", "service": "discord", "status": "up"}
+{"ts": "2026-11-16 08:25:36 CET", "service": "ea", "status": "warn"}
+{"ts": "2026-11-16 08:25:36 CET", "service": "steam", "status": "up"}
+{"ts": "2026-11-16 08:25:36 CET", "service": "ubisoft", "status": "up"}
+{"ts": "2026-11-16 08:25:37 CET", "service": "epic_store", "status": "up"}
+{"ts": "2026-11-16 08:25:37 CET", "service": "psn", "status": "up"}
+{"ts": "2026-11-16 08:25:37 CET", "service": "discord", "status": "up"}
