@@ -1,6 +1,7 @@
 import os
 import json
 import http.client
+import time
 from datetime import datetime, timezone, timedelta
 import calendar
 
@@ -42,16 +43,25 @@ def send_telegram(message: str) -> bool:
         "text":       message,
         "parse_mode": "HTML",
     }).encode()
-    conn = http.client.HTTPSConnection("api.telegram.org", timeout=15)
-    conn.request("POST", f"/bot{TELEGRAM_TOKEN}/sendMessage",
-                 body=payload,
-                 headers={"Content-Type": "application/json"})
-    resp = conn.getresponse()
-    raw  = resp.read().decode()
-    conn.close()
-    if resp.status == 200:
-        return True
-    print(f"Telegram error HTTP {resp.status}: {raw[:200]}")
+    for attempt in range(1, 4):
+        conn = http.client.HTTPSConnection("api.telegram.org", timeout=15)
+        try:
+            conn.request("POST", f"/bot{TELEGRAM_TOKEN}/sendMessage",
+                         body=payload,
+                         headers={"Content-Type": "application/json"})
+            resp = conn.getresponse()
+            raw  = resp.read().decode()
+            if resp.status == 200:
+                return True
+            print(f"Telegram error HTTP {resp.status}: {raw[:200]}")
+            return False
+        except (OSError, http.client.HTTPException) as e:
+            print(f"Telegram network error (attempt {attempt}/3): {type(e).__name__}: {e}")
+        finally:
+            conn.close()
+        if attempt < 3:
+            time.sleep(2 ** attempt)
+    print("ERROR: Telegram delivery failed after 3 attempts")
     return False
 
 

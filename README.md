@@ -35,6 +35,13 @@ No notification is sent if nothing changed. Silence means everything is fine.
 
 First run always fires a notification per service so you know the pipeline is working.
 
+Telegram network errors are logged and retried up to three times, waiting 2 and
+4 seconds between attempts. HTTP rejections are logged without retrying. If a
+transition notification cannot be delivered, the script exits with an error
+without updating state or history, so the next run can retry the transition.
+Some messages may be repeated if an earlier notification in the run succeeded
+or Telegram accepted a message before the connection failed.
+
 ---
 
 ## Monitored Services
@@ -167,6 +174,12 @@ This workflow is manual-only, uses read-only repository permissions, and receive
 no monitoring secrets. It does not execute the monitoring scripts, send Telegram
 notifications, or commit state changes. Update the pinned SHA to test newer
 changes to the action.
+
+### Unit tests
+
+Run `python -B -m unittest discover -s scripts -p "test_*.py" -v`.
+These tests simulate Telegram responses and network failures without sending
+messages or modifying state/history.
 
 ---
 

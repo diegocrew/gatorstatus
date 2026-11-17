@@ -166,6 +166,9 @@ def main():
             print(f"\n--- Message ---\n{msg}\n---------------")
             ok = send_telegram(msg)
             print("Sent" if ok else "Failed to send")
+            if not ok:
+                print("ERROR: State/history unchanged; notification will be retried next run")
+                sys.exit(1)
     else:
         print("\nNo transitions — no notifications sent")
 
