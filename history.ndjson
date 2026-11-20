@@ -34333,3 +34333,9 @@
 {"ts": "2026-11-20 02:22:34 CET", "service": "epic_store", "status": "up"}
 {"ts": "2026-11-20 02:22:34 CET", "service": "psn", "status": "down"}
 {"ts": "2026-11-20 02:22:34 CET", "service": "discord", "status": "up"}
+{"ts": "2026-11-20 02:35:13 CET", "service": "ea", "status": "up"}
+{"ts": "2026-11-20 02:35:13 CET", "service": "steam", "status": "up"}
+{"ts": "2026-11-20 02:35:13 CET", "service": "ubisoft", "status": "up"}
+{"ts": "2026-11-20 02:35:14 CET", "service": "epic_store", "status": "up"}
+{"ts": "2026-11-20 02:35:14 CET", "service": "psn", "status": "down"}
+{"ts": "2026-11-20 02:35:14 CET", "service": "discord", "status": "up"}
